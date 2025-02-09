@@ -49,7 +49,7 @@ Implementação de um sistema interativo que combina:
 1. **Pré-requisitos**
    - Clonar o repositório:
      ```bash
-     git clone https://github.com/JotaPablo/interrupcao.git
+     git clone https://github.com/JotaPablo/interface.git
      cd interrupcao
      ```
    - Instalar o **Visual Studio Code** com as seguintes extensões:
@@ -70,6 +70,4 @@ Implementação de um sistema interativo que combina:
    - **Na placa física:** 
      - Conecte a placa ao computador em modo **BOOTSEL**.
      - Copie o arquivo `.uf2` gerado na pasta `build` para o dispositivo identificado como `RPI-RP2`, ou envie através da extensão da Raspberry Pi Pico no VS Code.
-   - **No simulador Wokwi:** 
-     - Abra o arquivo `diagram.json` no Wokwi e execute a simulação.
-
+  
