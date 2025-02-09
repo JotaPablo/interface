@@ -56,7 +56,7 @@ Implementação de um sistema interativo que combina:
    - Clonar o repositório:
      ```bash
      git clone https://github.com/JotaPablo/interface.git
-     cd interrupcao
+     cd interface
      ```
    - Instalar o **Visual Studio Code** com as seguintes extensões:
      - **Raspberry Pi Pico SDK**
