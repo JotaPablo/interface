@@ -76,10 +76,8 @@ void printa_fonte() {
         // Adiciona comentário com caractere correspondente
         if(i < 26) {
             printf("// %c\n", 'a' + i);  // Letras minúsculas
-        } else if(i - 26 < sizeof(carac_especial)) {
+        } else{
             printf("// %c\n", carac_especial[i - 26]);  // Caracteres especiais
-        } else {
-            printf("// caractere indefinido\n");
         }
     }
 }
