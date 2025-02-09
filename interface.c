@@ -5,87 +5,95 @@
 #include "pico/bootrom.h"
 #include "inc/ssd1306.h"
 
-
-// Configuração da UART
-#define UART_ID uart0
-#define BAUD_RATE 115200
-#define UART_TX_PIN 0 
-#define UART_RX_PIN 1 
-#define BUFFER_SIZE 100 // Tamanho máximo da string
-
+// Definição dos pinos dos LEDs RGB
 #define RED_PIN 13
 #define GREEN_PIN 11
 #define BLUE_PIN 12
 
+// Definição dos pinos dos botões
 #define BUTTON_A 5
 #define BUTTON_B 6
 #define BUTTON_JOYSTICK 22
 
-static volatile uint32_t last_time_button_a = 0; // Armazena o tempo do último evento (em microssegundos)
-static volatile uint32_t last_time_button_b = 0; // Armazena o tempo do último evento (em microssegundos)
-static volatile uint32_t last_time_button_joystick = 0; // Armazena o tempo do último evento (em microssegundos)
+// Variáveis para debounce dos botões (armazenam tempo do último acionamento)
+static volatile uint32_t last_time_button_a = 0;
+static volatile uint32_t last_time_button_b = 0;
+static volatile uint32_t last_time_button_joystick = 0;
 
+// Protótipos das funções de tratamento de interrupção
 static void gpio_button_a_handler(uint gpio, uint32_t events);
 static void gpio_button_b_handler(uint gpio, uint32_t events);
 static void gpio_button_joystick_handler(uint gpio, uint32_t events);
 static void gpio_button_handler(uint gpio, uint32_t events);
 
-static ssd1306_t ssd; // Inicializa a estrutura do display
-void display_init();
+// Estrutura e funções do display OLED
+static ssd1306_t ssd; // Estrutura de controle do display
+void display_init();  // Inicialização do hardware
 
-void setup();
+// Variáveis globais
+void setup(); // Função de configuração inicial
+int c;        // Armazena o caractere recebido via USB
+void atualiza_display(); // Atualiza o conteúdo do OLED
+bool ATUALIZA = false;   // Flag para controle de atualização do display
 
-char c;
-void atualiza_display();
-
-
-int main()
-{
+int main() {
     setup();
-
     atualiza_display();
 
     while (true) {
-        c = fgetc(stdin);  // Lê um caractere do fluxo de entrada padrão
-        if(c >= '0' && c <= '9'){
-            exibirNumeroComFundo(c - '0',
-                                0, 10, 0,
-                                0, 0, 0);
+        // Verifica conexão USB e dados recebidos
+        if (stdio_usb_connected()) {
+            char aux = c;
+            // Obtém caractere com timeout de 100ms
+            c = getchar_timeout_us(100000);
+            
+            // Mantém último valor válido em caso de timeout
+            if(c == PICO_ERROR_TIMEOUT) {
+                c = aux;
+            } else {
+                // Processa caracteres numéricos
+                if(c >= '0' && c <= '9') {
+                    exibirNumeroComFundo(c - '0', 0, 10, 0, 0, 0, 0);
+                }
+                
+                // Comando para limpar NeoPixels
+                if(c == '!') {
+                    npClear();
+                    npWrite(); 
+                }
 
+                printf("%c\n", c); // Ecoa o caractere via USB
+                ATUALIZA = true;   // Solicita atualização do display
+            }
         }
-        if(c == '*'){
-            npClear();
-            npWrite();
+        
+        // Atualiza display se necessário
+        if(ATUALIZA) {
+            atualiza_display();
+            ATUALIZA = false;
         }
-
-        // Exemplo de lógica adicional (como LEDs, botões, etc.)
-        printf("%c\n", c);
-        atualiza_display();
-        sleep_ms(1000);  // Espera um pouco, mas o programa não fica bloqueado
     }
 }
 
-void setup(){
+void setup() {
+    // Inicialização de sistemas básicos
+    stdio_init_all(); // USB, stdio
+    
+    // Configuração de hardware
+    npInit(LED_PIN);  // Iniacializa NeoPixels
+    
+    display_init();    // Configura display OLED
 
-    // Inicializa a biblioteca padrão
-    stdio_init_all();
-
-    //Configura Matriz de Leds
-    npInit(LED_PIN);
-
-    //Configura Display
-    display_init();
-
-    // Configura LEDs
+    // Configura GPIOs dos LEDs
     gpio_init(GREEN_PIN);              
     gpio_set_dir(GREEN_PIN, GPIO_OUT); 
-    gpio_put(GREEN_PIN, false );         // Inicialmente desligado
+    gpio_put(GREEN_PIN, false); // Estado inicial desligado
 
     gpio_init(BLUE_PIN);              
     gpio_set_dir(BLUE_PIN, GPIO_OUT); 
-    gpio_put(BLUE_PIN, false);        // Inicialmente desligado
+    gpio_put(BLUE_PIN, false); // Estado inicial desligado
 
-    // Configura botões
+    // Configuração dos botões com pull-up
     gpio_init(BUTTON_A);
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
@@ -98,18 +106,14 @@ void setup(){
     gpio_set_dir(BUTTON_JOYSTICK, GPIO_IN);
     gpio_pull_up(BUTTON_JOYSTICK);
 
-    // Configura interrupções dos botões
+    // Configura interrupções para borda de descida (botão pressionado)
     gpio_set_irq_enabled_with_callback(BUTTON_A, GPIO_IRQ_EDGE_FALL, true, &gpio_button_handler);
     gpio_set_irq_enabled_with_callback(BUTTON_B, GPIO_IRQ_EDGE_FALL, true, &gpio_button_handler);
     gpio_set_irq_enabled_with_callback(BUTTON_JOYSTICK, GPIO_IRQ_EDGE_FALL, true, &gpio_button_handler);
 
-    // Configura a UART
-    uart_init(UART_ID, BAUD_RATE);
-    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART); // Configura o pino 0 para TX
-    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART); // Configura o pino 1 para RX
-
 }
 
+// Tratador central de interrupções de botões
 static void gpio_button_handler(uint gpio, uint32_t events) {
     switch(gpio) {
         case BUTTON_A:
@@ -124,71 +128,86 @@ static void gpio_button_handler(uint gpio, uint32_t events) {
     }
 }
 
-static void gpio_button_a_handler(uint gpio, uint32_t events){
+// Tratador do botão A (controle LED verde)
+static void gpio_button_a_handler(uint gpio, uint32_t events) {
     uint32_t current_time = to_us_since_boot(get_absolute_time());
+    
+    // Debounce: verifica se passaram pelo menos 200ms desde o último acionamento
     if (current_time - last_time_button_a > 200000) {
         last_time_button_a = current_time;
-        if(gpio_get(GREEN_PIN)) {
-            gpio_put(GREEN_PIN, false); 
-            printf("LED VERDE DESLIGADO!\n");
-        } else {
-            gpio_put(GREEN_PIN, true); 
-            printf("LED VERDE LIGADO!\n");
-        }
-        atualiza_display();
+        
+        // Alterna estado do LED
+        bool estado = !gpio_get(GREEN_PIN);
+        gpio_put(GREEN_PIN, estado); 
+        printf("LED VERDE %s!\n", estado ? "LIGADO" : "DESLIGADO");
+        
+        ATUALIZA = true; // Solicita atualização do display
     }
 }
 
-static void gpio_button_b_handler(uint gpio, uint32_t events){
+// Tratador do botão B (controle LED azul)
+static void gpio_button_b_handler(uint gpio, uint32_t events) {
     uint32_t current_time = to_us_since_boot(get_absolute_time());
+    
+    // Debounce: verifica se passaram pelo menos 200ms
     if (current_time - last_time_button_b > 200000) {
         last_time_button_b = current_time;
-        if(gpio_get(BLUE_PIN)) {
-            gpio_put(BLUE_PIN, false); 
-            printf("LED AZUL DESLIGADO!\n");
-            
-        } else {
-            gpio_put(BLUE_PIN, true); 
-            printf("LED AZUL LIGADO!\n");
-        }
-        atualiza_display();
+        
+        // Alterna estado do LED
+        bool estado = !gpio_get(BLUE_PIN);
+        gpio_put(BLUE_PIN, estado); 
+        printf("LED AZUL %s!\n", estado ? "LIGADO" : "DESLIGADO");
+        
+        ATUALIZA = true; // Solicita atualização do display
     }
 }
 
-static void gpio_button_joystick_handler(uint gpio, uint32_t events){
+// Tratador do botão do joystick (entra em modo bootloader USB)
+static void gpio_button_joystick_handler(uint gpio, uint32_t events) {
     printf("HABILITANDO O MODO GRAVAÇÃO");
-    reset_usb_boot(0,0);
+    reset_usb_boot(0,0); // Reinicia no modo DFU
 }
 
-void display_init(){
-  // I2C Initialisation. Using it at 400Khz.
-  i2c_init(I2C_PORT, 400 * 1000);
+// Inicialização do display OLED
+void display_init() {
+    // Configuração I2C a 400kHz
+    i2c_init(I2C_PORT, 400 * 1000);
+    
+    // Configura pinos I2C
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA); // Ativa pull-ups internos
+    gpio_pull_up(I2C_SCL);
 
-  gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-  gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-  gpio_pull_up(I2C_SDA); // Pull up the data line
-  gpio_pull_up(I2C_SCL); // Pull up the clock line
-  ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
-  ssd1306_config(&ssd); // Configura o display
-  ssd1306_send_data(&ssd); // Envia os dados para o display
+    // Inicialização do controlador SSD1306
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);
+    ssd1306_config(&ssd);
+    ssd1306_send_data(&ssd);
 
-  // Limpa o display. O display inicia com todos os pixels apagados.
-  ssd1306_fill(&ssd, false);
-  ssd1306_send_data(&ssd);
-}
-
-void atualiza_display(){
-
-    char string[25] = "";
-    string[0] = c;
-    string[1] = '\0';
+    // Limpa a tela inicialmente
     ssd1306_fill(&ssd, false);
-    ssd1306_draw_string(&ssd,
-        gpio_get(BLUE_PIN) ? "AZUL LIGADO" : "AZUL DESLIGADO",
-        5, 10);    
+    ssd1306_send_data(&ssd);
+}
+
+// Atualiza o conteúdo do display OLED
+void atualiza_display() {
+    char string[15] = "Caractere: "; // Buffer para texto (cuidado com overflow!)
+    string[11] = c; // Insere o caractere atual
+    string[12] = '\0'; // Terminador de string
+    
+    // Limpa o display e escreve novos conteúdos
+    ssd1306_fill(&ssd, false);
+    
+    // Exibe status dos LEDs
     ssd1306_draw_string(&ssd, 
         gpio_get(GREEN_PIN) ? "VERDE LIGADO" : "VERDE DESLIGADO",
-        5, 30); // Desenha uma string
-    ssd1306_draw_string(&ssd, string, 62, 50); // Desenha uma string      
-    ssd1306_send_data(&ssd); // Atualiza o display
+        5, 10);
+    ssd1306_draw_string(&ssd,
+        gpio_get(BLUE_PIN) ? "AZUL LIGADO" : "AZUL DESLIGADO",
+        5, 30);    
+
+    
+    // Exibe caractere recebido
+    ssd1306_draw_string(&ssd, string, 5, 50);     
+    ssd1306_send_data(&ssd); // Envia buffer para o display
 }

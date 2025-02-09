@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = 'build/interface.uf2'
-elf = 'build/interface.elf'
