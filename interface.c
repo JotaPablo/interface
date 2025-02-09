@@ -164,7 +164,15 @@ static void gpio_button_b_handler(uint gpio, uint32_t events) {
 
 // Tratador do botão do joystick (entra em modo bootloader USB)
 static void gpio_button_joystick_handler(uint gpio, uint32_t events) {
+    
     printf("HABILITANDO O MODO GRAVAÇÃO");
+
+    // Adicionar feedback no display OLED
+    ssd1306_fill(&ssd, false);
+    ssd1306_draw_string(&ssd, "  HABILITANDO", 5, 25);
+    ssd1306_draw_string(&ssd, " MODO GRAVACAO", 5, 38);
+    ssd1306_send_data(&ssd);
+
     reset_usb_boot(0,0); // Reinicia no modo DFU
 }
 
