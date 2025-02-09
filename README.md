@@ -2,6 +2,9 @@
 
 Projeto desenvolvido para a Unidade 4 - Capítulo 6, demonstrando o uso de interfaces seriais (UART, I2C) e controle de periféricos na placa BitDogLab com RP2040.
 
+## 🎥 Vídeo Demonstrativo
+[![Assista ao vídeo no YouTube](https://img.youtube.com/vi/o89VmsdiiDI/hqdefault.jpg)](https://youtu.be/o89VmsdiiDI)
+
 ## Descrição
 Implementação de um sistema interativo que combina:
 - Comunicação serial via USB/UART
